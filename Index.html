@@ -1,0 +1,347 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Life Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{display:none}
+body{background:#08080C;font-family:'DM Sans',-apple-system,sans-serif;overscroll-behavior:none;color:#E8E4DF}
+input::placeholder{color:rgba(201,162,39,.25)}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+input[type=number]{-moz-appearance:textfield}
+textarea{resize:none;font-family:inherit}
+</style>
+</head><body><div id="root"></div>
+<canvas id="fwc" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999"></canvas>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const h=React.createElement,{useState,useEffect,useRef,useCallback}=React;
+const G="#C9A227",GL="#E8CC6E",GD="rgba(201,162,39,.15)",BG="#08080C",CARD="rgba(255,255,255,.03)",BD="rgba(201,162,39,.13)";
+const PC={high:"#FF6B6B",medium:"#FBBF24",low:"#6BCB77"};
+const HC=[{bg:"linear-gradient(135deg,#8B5CF6,#C084FC)",s:"#C084FC"},{bg:"linear-gradient(135deg,#3B82F6,#60A5FA)",s:"#60A5FA"},{bg:"linear-gradient(135deg,#10B981,#34D399)",s:"#34D399"},{bg:"linear-gradient(135deg,#EF4444,#FCA5A5)",s:"#FCA5A5"},{bg:"linear-gradient(135deg,#F59E0B,#FCD34D)",s:"#FCD34D"},{bg:"linear-gradient(135deg,#EC4899,#F9A8D4)",s:"#F9A8D4"},{bg:"linear-gradient(135deg,#06B6D4,#67E8F9)",s:"#67E8F9"},{bg:"linear-gradient(135deg,#6366F1,#A5B4FC)",s:"#A5B4FC"}];
+const WD=["Mån","Tis","Ons","Tor","Fre","Lör","Sön"];
+const MO=["Januari","Februari","Mars","April","Maj","Juni","Juli","Augusti","September","Oktober","November","December"];
+const GCATS=["Hälsa","Karriär","Ekonomi","Utbildning","Relationer","Hobby","Personlig utveckling","Övrigt"];
+const INP={width:"100%",padding:"13px 16px",background:"rgba(255,255,255,.045)",border:"1px solid "+BD,borderRadius:13,color:"#F5F0EB",fontSize:14,outline:"none",fontFamily:"inherit",boxSizing:"border-box"};
+const FBTN={width:"100%",padding:14,borderRadius:13,background:"linear-gradient(135deg,"+G+","+GL+")",color:"#0A0A0E",border:"none",fontSize:14,fontWeight:700,cursor:"pointer"};
+const DBTN={width:"100%",padding:12,borderRadius:12,background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.18)",color:"#EF4444",fontSize:14,fontWeight:600,cursor:"pointer",marginTop:8};
+const smB=(a,c)=>({padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:600,background:a?c:"rgba(255,255,255,.04)",color:a?"#0A0A0E":"rgba(255,255,255,.35)",border:"1px solid "+(a?c:"rgba(255,255,255,.06)"),cursor:"pointer"});
+const LBL={fontSize:11,fontWeight:600,color:"rgba(201,162,39,.45)",marginBottom:6,textTransform:"uppercase",letterSpacing:".04em"};
+const gid=()=>Math.random().toString(36).slice(2,9);
+const dkf=d=>{const t=d instanceof Date?d:new Date(d);return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");};
+const tod=()=>dkf(new Date());
+const fmtL=d=>new Date(d+"T12:00:00").toLocaleDateString("sv-SE",{weekday:"long",day:"numeric",month:"long"});
+const wdi=d=>(new Date(d+"T12:00:00").getDay()+6)%7;
+const shiftD=(d,n)=>{const t=new Date(d+"T12:00:00");t.setDate(t.getDate()+n);return dkf(t);};
+const getWk=c=>{const ct=new Date(c+"T12:00:00"),dow=ct.getDay(),mon=new Date(ct);mon.setDate(ct.getDate()-((dow+6)%7));return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);const k=dkf(d);return{name:WD[i],date:d.getDate(),isToday:k===tod(),dk:k};});};
+const getMG=(y,m)=>{const f=new Date(y,m,1),s=(f.getDay()+6)%7,ds=new Date(y,m+1,0).getDate(),g=[];for(let i=0;i<s;i++)g.push(null);for(let d=1;d<=ds;d++){const dt=new Date(y,m,d);g.push({date:d,dk:dkf(dt),isToday:dkf(dt)===tod()});}return g;};
+const ding=()=>{try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.type="sine";o.frequency.setValueAtTime(880,c.currentTime);o.frequency.setValueAtTime(1318,c.currentTime+.08);g.gain.setValueAtTime(.15,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.35);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.35);setTimeout(()=>c.close(),600);}catch(e){}};
+// Fireworks - vanilla canvas, outside React
+const fwCv=document.getElementById("fwc");let fwP=[],fwOn=false;
+function fireAt(){const cv=fwCv,ctx=cv.getContext("2d");cv.width=window.innerWidth;cv.height=window.innerHeight;const cols=["#C9A227","#FFD700","#FF6B6B","#FBBF24","#6BCB77","#C084FC","#60A5FA","#FFF"],cx=cv.width/2,cy=cv.height/3;for(let i=0;i<36;i++){const a=(Math.PI*2*i)/36+(Math.random()-.5)*.3,s=3+Math.random()*5;fwP.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,decay:.014+Math.random()*.01,sz:2+Math.random()*2.5,col:cols[~~(Math.random()*cols.length)],g:.05});}if(!fwOn){fwOn=true;fwLoop();}}
+function fwLoop(){const ctx=fwCv.getContext("2d");ctx.clearRect(0,0,fwCv.width,fwCv.height);fwP=fwP.filter(p=>{if(p.life<=0)return false;p.x+=p.vx;p.y+=p.vy;p.vy+=p.g;p.vx*=.99;p.life-=p.decay;ctx.globalAlpha=p.life;ctx.beginPath();ctx.arc(p.x,p.y,p.sz,0,Math.PI*2);ctx.fillStyle=p.col;ctx.fill();ctx.globalAlpha=1;return true;});if(fwP.length>0)requestAnimationFrame(fwLoop);else fwOn=false;}
+function boom(){ding();fireAt();}
+// Long press - plain function factory (NOT a hook)
+function lp(cb){let t=null,p=false;return{onPointerDown:function(){p=false;t=setTimeout(function(){p=true;cb();},500);},onPointerUp:function(){clearTimeout(t);},onPointerLeave:function(){clearTimeout(t);},onClickCapture:function(e){if(p){e.preventDefault();e.stopPropagation();}}};}
+// Storage
+const LS="lp-v12";
+const ldS=()=>{try{const d=localStorage.getItem(LS);return d?JSON.parse(d):null;}catch(e){return null;}};
+const svS=d=>{try{localStorage.setItem(LS,JSON.stringify(d));}catch(e){}};
+const DEFS=()=>({tasks:[{id:gid(),text:"Planera veckans mål",done:false,priority:"high",date:tod()},{id:gid(),text:"Handla mat",done:false,priority:"medium",date:tod()}],habits:[{id:gid(),name:"Meditation",icon:"🧘",ci:0,streak:5,target:"15 min",comp:{},perDay:1,weekdays:[0,1,2,3,4,5,6]},{id:gid(),name:"Träning",icon:"💪",ci:1,streak:3,target:"30 min",comp:{},perDay:1,weekdays:[0,1,2,3,4]},{id:gid(),name:"Läsa",icon:"📖",ci:2,streak:12,target:"20 sidor",comp:{},perDay:1,weekdays:[0,1,2,3,4,5,6]},{id:gid(),name:"Drick vatten",icon:"💧",ci:6,streak:4,target:"8 glas",comp:{},perDay:8,weekdays:[0,1,2,3,4,5,6]}],goals:[{id:gid(),title:"Springa halvmaraton",progress:35,deadline:"2026-06-01",category:"Hälsa",notes:"Bygga upp gradvis",milestones:[{id:gid(),text:"Klara 5km",done:true},{id:gid(),text:"Klara 10km",done:false},{id:gid(),text:"Klara 15km",done:false}]},{id:gid(),title:"Läsa 24 böcker",progress:58,deadline:"2026-12-31",category:"Utbildning",notes:"2 böcker per månad",milestones:[{id:gid(),text:"12 böcker",done:true},{id:gid(),text:"18 böcker",done:false}]}],events:[],subs:[{id:gid(),name:"Spotify",cost:119,cycle:"Månadsvis",color:"#1DB954"},{id:gid(),name:"Netflix",cost:169,cycle:"Månadsvis",color:"#E50914"}]});
+// Sheet component - with swipe-down close
+function Sheet({open,onClose,title,children,onBack}){
+  const[vis,setVis]=useState(false);
+  const[an,setAn]=useState(false);
+  const sY=useRef(0);
+  useEffect(()=>{
+    if(open){setVis(true);requestAnimationFrame(()=>requestAnimationFrame(()=>setAn(true)));}
+    else{setAn(false);const t=setTimeout(()=>setVis(false),340);return()=>clearTimeout(t);}
+  },[open]);
+  if(!vis)return null;
+  const bdr=an?"rgba(0,0,0,.65)":"rgba(0,0,0,0)";
+  return(<>
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:bdr,zIndex:200,transition:"background .3s ease"}}/>
+    <div onTouchStart={e=>{sY.current=e.touches[0].clientY;}}
+         onTouchEnd={e=>{if(e.changedTouches[0].clientY-sY.current>80)onClose();}}
+         style={{position:"fixed",bottom:0,left:0,right:0,maxWidth:480,margin:"0 auto",background:"#111115",borderTop:"1px solid "+BD,borderRadius:"24px 24px 0 0",padding:"0 20px 40px",zIndex:210,maxHeight:"85vh",overflowY:"auto",transform:an?"translateY(0)":"translateY(100%)",transition:"transform .38s cubic-bezier(.32,.72,0,1)"}}>
+      <div style={{display:"flex",justifyContent:"center",padding:"10px 0 4px"}}><div style={{width:40,height:4,borderRadius:2,background:"rgba(255,255,255,.15)"}}/></div>
+      <div style={{display:"flex",alignItems:"center",padding:"8px 0 14px",gap:10}}>
+        {onBack&&<button onClick={onBack} style={{background:"rgba(255,255,255,.06)",border:"none",borderRadius:10,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"rgba(255,255,255,.5)",fontSize:16,flexShrink:0}}>‹</button>}
+        {title&&<div style={{fontSize:16,fontWeight:700,color:"#F5F0EB",flex:1}}>{title}</div>}
+      </div>
+      {children}
+    </div>
+  </>);
+}
+// HabitFields component
+function HabitFields({color,setColor,perDay,setPerDay,wdays,setWdays}){
+  return(<>
+    <div style={LBL}>Färg</div>
+    <div style={{display:"flex",gap:8,marginBottom:14}}>{HC.map((c,i)=><button key={i} onClick={()=>setColor(i)} style={{width:32,height:32,borderRadius:10,background:c.bg,border:color===i?"2.5px solid #FFF":"2.5px solid transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{color===i&&<span style={{color:"#FFF",fontSize:13}}>✓</span>}</button>)}</div>
+    <div style={LBL}>Antal per dag</div>
+    <div style={{display:"flex",gap:6,marginBottom:14}}>{[1,2,3,5,8,10].map(n=><button key={n} onClick={()=>setPerDay(n)} style={{width:40,height:36,borderRadius:10,fontSize:14,fontWeight:700,background:perDay===n?"linear-gradient(135deg,"+G+","+GL+")":"rgba(255,255,255,.04)",color:perDay===n?"#0A0A0E":"rgba(255,255,255,.3)",border:"none",cursor:"pointer"}}>{n}</button>)}</div>
+    <div style={LBL}>Aktiva dagar</div>
+    <div style={{display:"flex",gap:5,marginBottom:16}}>{WD.map((d,i)=>{const on=wdays.includes(i);return <button key={i} onClick={()=>setWdays(on?wdays.filter(x=>x!==i):[...wdays,i])} style={{flex:1,padding:"9px 0",borderRadius:10,fontSize:12,fontWeight:700,background:on?"linear-gradient(135deg,"+G+","+GL+")":"rgba(255,255,255,.04)",color:on?"#0A0A0E":"rgba(255,255,255,.25)",border:"none",cursor:"pointer"}}>{d}</button>;})}</div>
+  </>);
+}
+// EventFields component
+function EventFields({title,setTitle,hour,setHour,min,setMin,pri,setPri,onSave}){
+  return(<>
+    <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onSave()} placeholder="Vad ska hända?" style={{...INP,marginBottom:12}}/>
+    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",background:"rgba(255,255,255,.04)",borderRadius:12,border:"1px solid "+BD,overflow:"hidden"}}>
+        <input type="number" min="0" max="23" value={hour} onChange={e=>setHour(e.target.value)} style={{width:46,padding:"11px 4px",background:"transparent",border:"none",color:"#F5F0EB",fontSize:20,fontWeight:700,textAlign:"center",outline:"none",fontFamily:"inherit"}}/>
+        <span style={{fontSize:20,fontWeight:700,color:G}}>:</span>
+        <input type="number" min="0" max="59" step="5" value={min} onChange={e=>setMin(e.target.value)} style={{width:46,padding:"11px 4px",background:"transparent",border:"none",color:"#F5F0EB",fontSize:20,fontWeight:700,textAlign:"center",outline:"none",fontFamily:"inherit"}}/>
+      </div>
+      <div style={{display:"flex",gap:6,flex:1}}>{[{k:"high",l:"Hög",c:"#FF6B6B"},{k:"medium",l:"Med",c:G},{k:"low",l:"Låg",c:"#6BCB77"}].map(p=><button key={p.k} onClick={()=>setPri(p.k)} style={smB(pri===p.k,p.c)}>{p.l}</button>)}</div>
+    </div>
+    <button onClick={onSave} style={FBTN}>Spara</button>
+  </>);
+}
+// SH component
+function SH({icon,title,count,right}){return(<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span>{icon}</span><span style={{fontSize:11,fontWeight:700,color:G,letterSpacing:".07em",textTransform:"uppercase"}}>{title}</span>{count!==undefined&&<span style={{fontSize:11,color:"rgba(201,162,39,.3)"}}>{count}</span>}<div style={{flex:1,height:1,background:BD}}/>{right}</div>);}
+// DayRing component - OUTSIDE App to avoid re-mount
+function DayRing({d,vd,setVd,dayProg,hasAny}){
+  const sz=42,st=3,r=(sz-st)/2-1,ci=2*Math.PI*r,prog=dayProg(d.dk),off=ci-Math.min(prog,1)*ci,sel=vd===d.dk;
+  return(<div onClick={()=>setVd(d.dk)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer"}}>
+    <span style={{fontSize:10,fontWeight:d.isToday?700:400,color:sel?G:d.isToday?G:"rgba(255,255,255,.25)"}}>{d.name}</span>
+    <div style={{position:"relative",width:sz,height:sz}}>
+      <svg width={sz} height={sz} style={{transform:"rotate(-90deg)",position:"absolute"}}><circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke="rgba(201,162,39,.08)" strokeWidth={st}/>{prog>0&&<circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke={prog>=1?"#6BCB77":G} strokeWidth={st} strokeDasharray={ci} strokeDashoffset={off} strokeLinecap="round" style={{transition:"stroke-dashoffset .5s ease"}}/>}</svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:sel||d.isToday?700:500,color:sel?BG:d.isToday?GL:"rgba(255,255,255,.4)",background:sel?G:d.isToday?"rgba(201,162,39,.08)":"transparent",borderRadius:"50%",margin:st}}>{d.date}</div>
+      {hasAny(d.dk)&&!sel&&<div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:4,height:4,borderRadius:"50%",background:G}}/>}
+    </div>
+  </div>);
+}
+// === MAIN APP ===
+function App(){
+  const[data,setData]=useState(()=>ldS()||DEFS());
+  const[tab,setTab]=useState("today");
+  const[vd,setVd]=useState(tod());
+  const[showAdd,setShowAdd]=useState(false);const[addStep,setAddStep]=useState("pick");
+  const[nt,setNt]=useState("");const[np,setNp]=useState("medium");
+  const[nc,setNc]=useState(0);const[npd,setNpd]=useState(1);const[nwd,setNwd]=useState([0,1,2,3,4,5,6]);
+  const[evH,setEvH]=useState("12");const[evMi,setEvMi]=useState("00");const[evP,setEvP]=useState("medium");
+  const[calM,setCalM]=useState(new Date().getMonth());const[calY,setCalY]=useState(new Date().getFullYear());
+  const[calDay,setCalDay]=useState(null);const[showDS,setShowDS]=useState(false);const[dsForm,setDsForm]=useState(null);
+  const[evT,setEvT]=useState("");const[calTT,setCalTT]=useState("");const[calTP,setCalTP]=useState("medium");
+  const[calHN,setCalHN]=useState("");const[calHC,setCalHC]=useState(0);const[calHP,setCalHP]=useState(1);const[calHW,setCalHW]=useState([0,1,2,3,4,5,6]);
+  const[yrV,setYrV]=useState(false);
+  const[showSF,setShowSF]=useState(false);const[sn,setSn]=useState("");const[sc2,setSc2]=useState("");const[scol,setScol]=useState(G);
+  const[showGF,setShowGF]=useState(false);const[gt,setGt]=useState("");const[gd2,setGd2]=useState("");const[gp,setGp]=useState(0);
+  const[gCat,setGCat]=useState("Övrigt");const[gNotes,setGNotes]=useState("");const[gMs,setGMs]=useState([]);const[gMsT,setGMsT]=useState("");
+  const[editType,setEditType]=useState(null);const[editId,setEditId]=useState(null);
+  const[eText,setEText]=useState("");const[ePri,setEPri]=useState("medium");const[eDate,setEDate]=useState("");
+  const[eColor,setEColor]=useState(0);const[ePerDay,setEPerDay]=useState(1);const[eWdays,setEWdays]=useState([]);
+  const[eProg,setEProg]=useState(0);const[eDL,setEDL]=useState("");const[eCat,setECat]=useState("Övrigt");const[eNotes,setENotes]=useState("");const[eMs,setEMs]=useState([]);const[eMsT,setEMsT]=useState("");
+  const[expGoal,setExpGoal]=useState(null);
+
+  const save=useCallback(d=>{setData(d);svS(d);},[]);
+  const hCnt=(h,d)=>h.comp[d]||0;
+  const hAct=(h,d)=>h.weekdays.includes(wdi(d));
+  const dayH=useCallback(d=>data.habits.filter(h=>hAct(h,d)),[data.habits]);
+  const dayT=useCallback(d=>data.tasks.filter(t=>t.date===d),[data.tasks]);
+  const dayE=useCallback(d=>data.events.filter(e=>e.date===d),[data.events]);
+  const hasAny=useCallback(d=>dayE(d).length>0||dayT(d).length>0,[dayE,dayT]);
+  const dayProg=useCallback(d=>{const ah=dayH(d),at=dayT(d),tot=ah.length+at.length;if(!tot)return 0;return(ah.filter(h=>hCnt(h,d)>=h.perDay).length+at.filter(t=>t.done).length)/tot;},[dayH,dayT]);
+
+  const togTask=id=>{const t=data.tasks.find(x=>x.id===id);if(!t)return;if(!t.done)boom();save({...data,tasks:data.tasks.map(x=>x.id===id?{...x,done:!x.done}:x)});};
+  const priC=id=>{const nx={high:"medium",medium:"low",low:"high"};save({...data,tasks:data.tasks.map(t=>t.id===id?{...t,priority:nx[t.priority]}:t)});};
+  const delT=id=>save({...data,tasks:data.tasks.filter(t=>t.id!==id)});
+  const hP=id=>{const hb=data.habits.find(x=>x.id===id);if(!hb)return;const d=vd,cur=hCnt(hb,d);if(cur>=hb.perDay)return;boom();save({...data,habits:data.habits.map(x=>x.id!==id?x:{...x,comp:{...x.comp,[d]:cur+1},streak:cur+1>=x.perDay?x.streak+1:x.streak})});};
+  const hM=id=>{const hb=data.habits.find(x=>x.id===id);if(!hb)return;const d=vd,cur=hCnt(hb,d);if(cur<=0)return;const wf=cur>=hb.perDay;save({...data,habits:data.habits.map(x=>x.id!==id?x:{...x,comp:{...x.comp,[d]:cur-1},streak:wf?Math.max(0,x.streak-1):x.streak})});};
+  const resetAdd=()=>{setNt("");setShowAdd(false);setAddStep("pick");setNpd(1);setNwd([0,1,2,3,4,5,6]);setNc(0);};
+  const doAdd=()=>{
+    if(addStep==="task"){if(!nt.trim())return;save({...data,tasks:[{id:gid(),text:nt.trim(),done:false,priority:np,date:vd},...data.tasks]});}
+    else if(addStep==="habit"){if(!nt.trim())return;save({...data,habits:[...data.habits,{id:gid(),name:nt.trim(),icon:"⭐",ci:nc,streak:0,target:npd>1?npd+"x/dag":"",comp:{},perDay:npd,weekdays:nwd}]});}
+    else if(addStep==="event"){if(!nt.trim())return;save({...data,events:[...data.events,{id:gid(),title:nt.trim(),time:String(evH).padStart(2,"0")+":"+String(evMi).padStart(2,"0"),priority:evP,date:vd}]});}
+    resetAdd();};
+  const doCalAdd=()=>{
+    if(dsForm==="event"){if(!evT.trim())return;save({...data,events:[...data.events,{id:gid(),title:evT.trim(),time:String(evH).padStart(2,"0")+":"+String(evMi).padStart(2,"0"),priority:evP,date:calDay}]});setEvT("");}
+    else if(dsForm==="task"){if(!calTT.trim())return;save({...data,tasks:[...data.tasks,{id:gid(),text:calTT.trim(),done:false,priority:calTP,date:calDay}]});setCalTT("");}
+    else if(dsForm==="habit"){if(!calHN.trim())return;save({...data,habits:[...data.habits,{id:gid(),name:calHN.trim(),icon:"⭐",ci:calHC,streak:0,target:calHP>1?calHP+"x/dag":"",comp:{},perDay:calHP,weekdays:calHW}]});setCalHN("");}
+    setDsForm(null);};
+  const delEv=id=>save({...data,events:data.events.filter(e=>e.id!==id)});
+  const addSub=()=>{if(!sn.trim()||!sc2)return;save({...data,subs:[...data.subs,{id:gid(),name:sn.trim(),cost:parseFloat(sc2),cycle:"Månadsvis",color:scol}]});setSn("");setSc2("");setShowSF(false);};
+  const delSub=id=>save({...data,subs:data.subs.filter(s=>s.id!==id)});
+  const addGoal=()=>{if(!gt.trim())return;save({...data,goals:[...data.goals,{id:gid(),title:gt.trim(),progress:gp,deadline:gd2||"2027-12-31",category:gCat,notes:gNotes,milestones:gMs}]});setGt("");setGd2("");setGp(0);setGCat("Övrigt");setGNotes("");setGMs([]);setShowGF(false);};
+  const delGoal=id=>save({...data,goals:data.goals.filter(g=>g.id!==id)});
+  const updG=(id,v)=>save({...data,goals:data.goals.map(g=>g.id===id?{...g,progress:Math.max(0,Math.min(100,v))}:g)});
+  const toggleMs=(gId,mId)=>save({...data,goals:data.goals.map(g=>g.id===gId?{...g,milestones:(g.milestones||[]).map(m=>m.id===mId?{...m,done:!m.done}:m)}:g)});
+  const openEditTask=id=>{const t=data.tasks.find(x=>x.id===id);if(!t)return;setEditType("task");setEditId(id);setEText(t.text);setEPri(t.priority);setEDate(t.date);};
+  const openEditHabit=id=>{const hb=data.habits.find(x=>x.id===id);if(!hb)return;setEditType("habit");setEditId(id);setEText(hb.name);setEColor(hb.ci);setEPerDay(hb.perDay);setEWdays([...hb.weekdays]);};
+  const openEditGoal=id=>{const g=data.goals.find(x=>x.id===id);if(!g)return;setEditType("goal");setEditId(id);setEText(g.title);setEProg(g.progress);setEDL(g.deadline);setECat(g.category||"Övrigt");setENotes(g.notes||"");setEMs(g.milestones||[]);setEMsT("");};
+  const saveEdit=()=>{
+    if(editType==="task")save({...data,tasks:data.tasks.map(t=>t.id===editId?{...t,text:eText,priority:ePri,date:eDate}:t)});
+    else if(editType==="habit")save({...data,habits:data.habits.map(hb=>hb.id===editId?{...hb,name:eText,ci:eColor,perDay:ePerDay,weekdays:eWdays,target:ePerDay>1?ePerDay+"x/dag":""}:hb)});
+    else if(editType==="goal")save({...data,goals:data.goals.map(g=>g.id===editId?{...g,title:eText,progress:eProg,deadline:eDL,category:eCat,notes:eNotes,milestones:eMs}:g)});
+    setEditType(null);};
+  const deleteEdit=()=>{
+    if(editType==="task")delT(editId);else if(editType==="habit")save({...data,habits:data.habits.filter(hb=>hb.id!==editId)});else if(editType==="goal")delGoal(editId);
+    setEditType(null);};
+
+  const vH=dayH(vd),vT=dayT(vd),vE=dayE(vd),wk=getWk(vd),cg=getMG(calY,calM);
+  const cDE=calDay?dayE(calDay):[],cDT=calDay?dayT(calDay):[],cDH=calDay?dayH(calDay):[];
+  const tSubs=data.subs.reduce((s,x)=>s+x.cost,0);
+  // === RENDER ===
+  return(<>
+    <div style={{maxWidth:480,margin:"0 auto",paddingBottom:90,minHeight:"100vh"}}>
+      {/* HEADER */}
+      <div style={{padding:"44px 24px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:22,fontWeight:700,color:"#F5F0EB",textTransform:"capitalize"}}>{tab==="today"?fmtL(vd):tab==="calendar"?"Kalender":tab==="subs"?"Abonnemang":"Mål"}</div>
+        {tab==="today"&&vd!==tod()&&<button onClick={()=>setVd(tod())} style={{background:"linear-gradient(135deg,"+G+","+GL+")",border:"none",borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,color:BG,cursor:"pointer"}}>Idag</button>}
+      </div>
+
+      {/* TODAY TAB */}
+      {tab==="today"&&<>
+        <div style={{display:"flex",alignItems:"center",padding:"8px 8px 14px"}}>
+          <button onClick={()=>setVd(shiftD(vd,-7))} style={{background:"none",border:"none",color:G,fontSize:18,cursor:"pointer",padding:"4px 8px"}}>‹</button>
+          <div style={{flex:1,display:"flex",justifyContent:"space-between",padding:"0 4px"}}>{wk.map(d=><DayRing key={d.dk} d={d} vd={vd} setVd={setVd} dayProg={dayProg} hasAny={hasAny}/>)}</div>
+          <button onClick={()=>setVd(shiftD(vd,7))} style={{background:"none",border:"none",color:G,fontSize:18,cursor:"pointer",padding:"4px 8px"}}>›</button>
+        </div>
+        <div style={{padding:"0 24px"}}>
+          {/* Events */}
+          {vE.length>0&&<><SH icon="📌" title="Händelser"/>{vE.sort((a,b)=>(a.time||"").localeCompare(b.time||"")).map(ev=><div key={ev.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"rgba(201,162,39,.05)",border:"1px solid "+BD,borderRadius:14,marginBottom:8}}>{ev.time&&<div style={{fontSize:13,fontWeight:700,color:G,minWidth:44,textAlign:"center"}}>{ev.time}</div>}<div style={{width:3,height:28,borderRadius:2,background:PC[ev.priority]||G}}/><div style={{flex:1,fontSize:14,fontWeight:500,color:"#F5F0EB"}}>{ev.title}</div><button onClick={()=>delEv(ev.id)} style={{background:"none",border:"none",color:"rgba(255,255,255,.12)",cursor:"pointer",fontSize:14}}>✕</button></div>)}<div style={{height:10}}/></>}
+          {/* Tasks */}
+          <SH icon="✅" title="Att göra" count={vT.filter(t=>t.done).length+"/"+vT.length}/>
+          {vT.sort((a,b)=>a.done-b.done).map(t=><div key={t.id} {...lp(()=>openEditTask(t.id))} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:t.done?"rgba(107,203,119,.04)":CARD,border:"1px solid "+(t.done?"rgba(107,203,119,.12)":BD),borderRadius:14,marginBottom:8,opacity:t.done?.45:1,touchAction:"none"}}>
+            <div onClick={()=>togTask(t.id)} style={{width:24,height:24,borderRadius:8,border:t.done?"none":"2px solid rgba(201,162,39,.3)",background:t.done?"#6BCB77":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>{t.done&&<span style={{color:BG,fontWeight:700,fontSize:12}}>✓</span>}</div>
+            <span onClick={()=>!t.done&&priC(t.id)} style={{width:10,height:10,borderRadius:"50%",background:PC[t.priority],flexShrink:0,cursor:"pointer"}}/>
+            <span style={{flex:1,fontSize:15,color:t.done?"rgba(255,255,255,.25)":"#F5F0EB",textDecoration:t.done?"line-through":"none"}}>{t.text}</span>
+          </div>)}
+          {vT.length===0&&<div style={{textAlign:"center",padding:20,color:"rgba(255,255,255,.06)",fontSize:13}}>Inga uppgifter</div>}
+          <div style={{height:1,background:"linear-gradient(90deg,transparent,"+BD+",transparent)",margin:"18px 0"}}/>
+          {/* Habits */}
+          <SH icon="🔄" title="Vanor" count={vH.filter(hb=>hCnt(hb,vd)>=hb.perDay).length+"/"+vH.length}/>
+          {vH.map(hb=>{const cnt=hCnt(hb,vd),full=cnt>=hb.perDay,pct=hb.perDay>0?Math.min(cnt/hb.perDay,1):0,col=HC[hb.ci%HC.length];
+          return(<div key={hb.id} {...lp(()=>openEditHabit(hb.id))} style={{position:"relative",borderRadius:16,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,minHeight:56,overflow:"hidden",background:"rgba(255,255,255,.025)",border:"1px solid "+(full?"rgba(107,203,119,.15)":"rgba(255,255,255,.06)"),opacity:full?.5:1,touchAction:"none"}}>
+            <div style={{position:"absolute",top:0,left:0,bottom:0,width:pct*100+"%",background:col.bg,opacity:full?.12:.25,transition:"width .4s ease",borderRadius:16,zIndex:0}}/>
+            <div style={{fontSize:20,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.2)",borderRadius:10,flexShrink:0,zIndex:1}}>{hb.icon}</div>
+            <div style={{flex:1,minWidth:0,zIndex:1}}><div style={{fontSize:14,fontWeight:600,color:full?"rgba(255,255,255,.4)":"#F5F0EB",textDecoration:full?"line-through":"none"}}>{hb.name}</div><div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginTop:1}}>{hb.perDay>1?cnt+" / "+hb.perDay:full?"Klar!":hb.target||"Varje dag"}</div></div>
+            {hb.streak>0&&<div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",background:"rgba(0,0,0,.15)",borderRadius:8,padding:"2px 7px",zIndex:1}}>🔥{hb.streak}</div>}
+            {cnt>0&&<button onClick={e=>{e.stopPropagation();hM(hb.id);}} style={{width:30,height:30,borderRadius:10,background:"rgba(255,255,255,.07)",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",zIndex:1,color:"rgba(255,255,255,.45)",fontSize:18,fontWeight:700}}>−</button>}
+            <button onClick={e=>{e.stopPropagation();hP(hb.id);}} style={{width:34,height:34,borderRadius:11,background:full?"#6BCB77":col.s+"35",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:full?"default":"pointer",flexShrink:0,zIndex:1,color:full?"#FFF":col.s,fontSize:18,fontWeight:700}}>{full?"✓":"+"}</button>
+          </div>);})}
+          {vH.length===0&&<div style={{textAlign:"center",padding:20,color:"rgba(255,255,255,.06)",fontSize:13}}>Inga vanor</div>}
+        </div>
+      </>}
+      {/* CALENDAR TAB */}
+      {tab==="calendar"&&<div style={{padding:"0 20px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,marginTop:8}}>
+          <button onClick={()=>{if(calM===0){setCalM(11);setCalY(y=>y-1);}else setCalM(m=>m-1);setCalDay(null);}} style={{background:"none",border:"none",color:G,fontSize:24,cursor:"pointer"}}>‹</button>
+          <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:700,color:"#F5F0EB"}}>{MO[calM]} {calY}</div><button onClick={()=>setYrV(!yrV)} style={{background:"none",border:"none",color:G,fontSize:11,cursor:"pointer",marginTop:3,textDecoration:"underline",textUnderlineOffset:3}}>{yrV?"Stäng":"Hela året"}</button></div>
+          <button onClick={()=>{if(calM===11){setCalM(0);setCalY(y=>y+1);}else setCalM(m=>m+1);setCalDay(null);}} style={{background:"none",border:"none",color:G,fontSize:24,cursor:"pointer"}}>›</button>
+        </div>
+        {yrV?<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>{MO.map((m,i)=><button key={i} onClick={()=>{setCalM(i);setYrV(false);}} style={{padding:"14px 8px",borderRadius:12,fontSize:13,fontWeight:i===calM?700:400,background:i===calM?GD:CARD,border:"1px solid "+(i===calM?BD:"rgba(255,255,255,.04)"),color:i===calM?G:"rgba(255,255,255,.3)",cursor:"pointer"}}>{m.slice(0,3)}</button>)}</div>
+        :<><div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:6}}>{WD.map(d=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:600,color:"rgba(201,162,39,.4)",padding:"6px 0"}}>{d}</div>)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>{cg.map((d,i)=>{if(!d)return <div key={"e"+i}/>;const sel=calDay===d.dk,has=hasAny(d.dk);return <button key={d.dk} onClick={()=>{setCalDay(d.dk);setShowDS(true);setDsForm(null);}} style={{position:"relative",width:"100%",aspectRatio:"1",borderRadius:12,fontSize:15,fontWeight:d.isToday?800:sel?600:400,color:d.isToday?BG:sel?BG:"rgba(255,255,255,.5)",background:d.isToday?"linear-gradient(135deg,"+G+","+GL+")":sel?GL:"rgba(255,255,255,.025)",border:(d.isToday||sel)?"none":"1px solid rgba(201,162,39,.06)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{d.date}{has&&!d.isToday&&!sel&&<div style={{position:"absolute",bottom:4,left:"50%",transform:"translateX(-50%)",width:5,height:5,borderRadius:"50%",background:G}}/>}</button>;})}</div></>}
+      </div>}
+
+      {/* SUBS TAB */}
+      {tab==="subs"&&<div style={{padding:"0 24px",marginTop:8}}>
+        <div style={{background:GD,border:"1px solid "+BD,borderRadius:14,padding:16,textAlign:"center",marginBottom:18}}><div style={{fontSize:28,fontWeight:800,background:"linear-gradient(135deg,"+G+","+GL+")",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{tSubs} kr</div><div style={{fontSize:12,color:"rgba(201,162,39,.4)",marginTop:2}}>Per månad</div></div>
+        {data.subs.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:14,padding:"13px 16px",background:CARD,border:"1px solid "+BD,borderRadius:14,marginBottom:8}}><div style={{width:10,height:10,borderRadius:"50%",background:s.color}}/><div style={{flex:1}}><div style={{fontSize:15,fontWeight:500,color:"#F5F0EB"}}>{s.name}</div><div style={{fontSize:11,color:"rgba(201,162,39,.3)",marginTop:1}}>{s.cycle}</div></div><div style={{fontSize:15,fontWeight:600,color:"#F5F0EB"}}>{s.cost} kr</div><button onClick={()=>delSub(s.id)} style={{background:"none",border:"none",color:"rgba(255,255,255,.12)",cursor:"pointer"}}>✕</button></div>)}
+        <button onClick={()=>setShowSF(true)} style={{width:"100%",padding:13,borderRadius:14,background:"rgba(201,162,39,.06)",border:"1px dashed "+BD,color:G,fontSize:14,fontWeight:600,cursor:"pointer",marginTop:6}}>+ Lägg till</button>
+      </div>}
+
+      {/* GOALS TAB */}
+      {tab==="goals"&&<div style={{padding:"0 24px",marginTop:8}}>
+        <SH icon="🎯" title="Livsmål" right={<button onClick={()=>setShowGF(true)} style={{background:"linear-gradient(135deg,"+G+","+GL+")",color:BG,border:"none",borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Nytt mål</button>}/>
+        {data.goals.map(g=>{const dl=Math.ceil((new Date(g.deadline)-new Date())/86400000),r2=18,ci2=2*Math.PI*r2,off2=ci2-(g.progress/100)*ci2,c2=g.progress>=75?"#6BCB77":g.progress>=40?G:"#60A5FA",exp=expGoal===g.id,msDone=(g.milestones||[]).filter(m=>m.done).length,msTotal=(g.milestones||[]).length;
+        return(<div key={g.id} {...lp(()=>openEditGoal(g.id))} style={{background:CARD,border:"1px solid "+BD,borderRadius:16,padding:18,marginBottom:12,touchAction:"none"}}>
+          <div onClick={()=>setExpGoal(exp?null:g.id)} style={{display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
+            <div style={{position:"relative",width:48,height:48,flexShrink:0}}><svg width={48} height={48} style={{transform:"rotate(-90deg)"}}><circle cx={24} cy={24} r={r2} fill="none" stroke="rgba(201,162,39,.1)" strokeWidth={3.5}/><circle cx={24} cy={24} r={r2} fill="none" stroke={c2} strokeWidth={3.5} strokeDasharray={ci2} strokeDashoffset={off2} strokeLinecap="round" style={{transition:"all .5s ease"}}/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"rgba(255,255,255,.55)"}}>{g.progress}%</div></div>
+            <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:"#F5F0EB"}}>{g.title}</div><div style={{display:"flex",gap:8,alignItems:"center",marginTop:4}}>{g.category&&<span style={{fontSize:10,fontWeight:600,color:G,background:GD,borderRadius:6,padding:"2px 8px"}}>{g.category}</span>}<span style={{fontSize:11,color:"rgba(201,162,39,.3)"}}>{dl>0?dl+" dagar kvar":"Förfallen"}</span></div></div>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}><button onClick={e=>{e.stopPropagation();updG(g.id,g.progress+5);}} style={{width:28,height:28,borderRadius:8,background:GD,border:"none",color:G,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button><button onClick={e=>{e.stopPropagation();updG(g.id,g.progress-5);}} style={{width:28,height:28,borderRadius:8,background:"rgba(255,255,255,.04)",border:"none",color:"rgba(255,255,255,.2)",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button></div>
+          </div>
+          <div style={{height:4,borderRadius:2,background:"rgba(201,162,39,.1)",marginTop:12,overflow:"hidden"}}><div style={{height:"100%",borderRadius:2,width:g.progress+"%",background:c2,transition:"width .4s ease"}}/></div>
+          {exp&&<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid rgba(255,255,255,.05)"}}>
+            {g.notes&&<div style={{fontSize:13,color:"rgba(255,255,255,.45)",marginBottom:12,lineHeight:1.5}}>{g.notes}</div>}
+            {msTotal>0&&<><div style={{...LBL,marginBottom:8}}>Delmål ({msDone}/{msTotal})</div>{(g.milestones||[]).map(m=><div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:m.done?"rgba(107,203,119,.05)":"rgba(255,255,255,.025)",borderRadius:10,border:"1px solid "+(m.done?"rgba(107,203,119,.12)":"rgba(255,255,255,.05)"),marginBottom:6}}><div onClick={()=>toggleMs(g.id,m.id)} style={{width:20,height:20,borderRadius:6,border:m.done?"none":"2px solid rgba(201,162,39,.25)",background:m.done?"#6BCB77":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>{m.done&&<span style={{color:BG,fontSize:10,fontWeight:700}}>✓</span>}</div><span style={{flex:1,fontSize:13,color:m.done?"rgba(255,255,255,.3)":"#F5F0EB",textDecoration:m.done?"line-through":"none"}}>{m.text}</span></div>)}</>}
+            {msTotal===0&&!g.notes&&<div style={{fontSize:12,color:"rgba(255,255,255,.15)",textAlign:"center",padding:"8px 0"}}>Håll in för att redigera</div>}
+          </div>}
+        </div>);})}
+        {data.goals.length===0&&<div style={{textAlign:"center",padding:32,color:"rgba(255,255,255,.08)",fontSize:13}}>Inga mål ännu</div>}
+      </div>}
+    </div>
+    {/* BOTTOM NAV */}
+    <div style={{position:"fixed",bottom:0,left:0,right:0,maxWidth:480,margin:"0 auto",height:72,background:"rgba(8,8,12,.96)",backdropFilter:"blur(20px)",borderTop:"1px solid "+BD,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"0 8px",paddingBottom:8,zIndex:100}}>
+      {[{id:"today",ic:"☀️",l:"Idag"},{id:"calendar",ic:"📅",l:"Kalender"}].map(t=><button key={t.id} onClick={()=>{setTab(t.id);if(t.id==="today")setVd(tod());}} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"4px 6px",minWidth:48}}><span style={{fontSize:18,opacity:tab===t.id?1:.3}}>{t.ic}</span><span style={{fontSize:9,fontWeight:tab===t.id?700:500,color:tab===t.id?G:"rgba(255,255,255,.25)"}}>{t.l}</span></button>)}
+      <div style={{marginTop:-28}}><button onClick={()=>{setShowAdd(true);setAddStep("pick");}} style={{width:56,height:56,borderRadius:18,background:"linear-gradient(135deg,"+G+","+GL+")",color:BG,border:"3px solid "+BG,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 6px 28px rgba(201,162,39,.45)",fontSize:28,fontWeight:300}}>+</button></div>
+      {[{id:"subs",ic:"💳",l:"Abonnemang"},{id:"goals",ic:"🎯",l:"Mål"}].map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"4px 6px",minWidth:48}}><span style={{fontSize:18,opacity:tab===t.id?1:.3}}>{t.ic}</span><span style={{fontSize:9,fontWeight:tab===t.id?700:500,color:tab===t.id?G:"rgba(255,255,255,.25)"}}>{t.l}</span></button>)}
+    </div>
+
+    {/* ADD SHEET */}
+    <Sheet open={showAdd} onClose={resetAdd} onBack={addStep!=="pick"?()=>setAddStep("pick"):undefined} title={addStep==="pick"?"Lägg till":addStep==="task"?"Ny uppgift":addStep==="habit"?"Ny vana":"Ny händelse"}>
+      {addStep==="pick"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>{[{k:"task",ic:"✅",l:"Att göra",d:"En uppgift att bocka av"},{k:"habit",ic:"🔄",l:"Ny vana",d:"Daglig eller veckovis vana"},{k:"event",ic:"📌",l:"Händelse",d:"Något att komma ihåg"}].map(o=><button key={o.k} onClick={()=>setAddStep(o.k)} style={{display:"flex",alignItems:"center",gap:14,padding:16,background:"rgba(255,255,255,.03)",border:"1px solid "+BD,borderRadius:14,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:22,width:42,height:42,display:"flex",alignItems:"center",justifyContent:"center",background:GD,borderRadius:12}}>{o.ic}</span><div><div style={{fontSize:15,fontWeight:600,color:"#F5F0EB"}}>{o.l}</div><div style={{fontSize:12,color:"rgba(255,255,255,.3)",marginTop:2}}>{o.d}</div></div></button>)}</div>}
+      {addStep==="task"&&<><input value={nt} onChange={e=>setNt(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()} placeholder="Vad behöver göras?" style={{...INP,marginBottom:12}} autoFocus/><div style={{display:"flex",gap:8,alignItems:"center"}}>{[{k:"high",l:"Hög",c:"#FF6B6B"},{k:"medium",l:"Medium",c:G},{k:"low",l:"Låg",c:"#6BCB77"}].map(p=><button key={p.k} onClick={()=>setNp(p.k)} style={smB(np===p.k,p.c)}>{p.l}</button>)}<button onClick={doAdd} style={{marginLeft:"auto",padding:"9px 22px",borderRadius:10,background:"linear-gradient(135deg,"+G+","+GL+")",color:BG,border:"none",fontSize:13,fontWeight:700,cursor:"pointer"}}>Lägg till</button></div></>}
+      {addStep==="habit"&&<><input value={nt} onChange={e=>setNt(e.target.value)} placeholder="Namn på vana" style={{...INP,marginBottom:14}} autoFocus/><HabitFields color={nc} setColor={setNc} perDay={npd} setPerDay={setNpd} wdays={nwd} setWdays={setNwd}/><button onClick={doAdd} style={FBTN}>Skapa vana</button></>}
+      {addStep==="event"&&<EventFields title={nt} setTitle={setNt} hour={evH} setHour={setEvH} min={evMi} setMin={setEvMi} pri={evP} setPri={setEvP} onSave={doAdd}/>}
+    </Sheet>
+
+    {/* CAL DAY SHEET */}
+    <Sheet open={showDS&&tab==="calendar"} onClose={()=>{setShowDS(false);setDsForm(null);}} onBack={dsForm&&dsForm!=="pick"?()=>setDsForm("pick"):dsForm==="pick"?()=>setDsForm(null):undefined} title={dsForm==="pick"?"Lägg till":dsForm==="event"?"Ny händelse":dsForm==="task"?"Ny uppgift":dsForm==="habit"?"Ny vana":calDay?fmtL(calDay):""}>
+      {!dsForm&&<>
+        {cDE.length>0&&<><div style={LBL}>Händelser</div>{cDE.sort((a,b)=>(a.time||"").localeCompare(b.time||"")).map(ev=><div key={ev.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"rgba(201,162,39,.05)",border:"1px solid "+BD,borderRadius:14,marginBottom:8}}>{ev.time&&<div style={{fontSize:13,fontWeight:700,color:G,minWidth:44,textAlign:"center"}}>{ev.time}</div>}<div style={{width:3,height:28,borderRadius:2,background:PC[ev.priority]||G}}/><div style={{flex:1,fontSize:14,fontWeight:500,color:"#F5F0EB"}}>{ev.title}</div><button onClick={()=>delEv(ev.id)} style={{background:"none",border:"none",color:"rgba(255,255,255,.12)",cursor:"pointer"}}>✕</button></div>)}</>}
+        {cDT.length>0&&<><div style={{...LBL,marginTop:cDE.length?12:0}}>Uppgifter</div>{cDT.map(t=><div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:CARD,border:"1px solid "+BD,borderRadius:14,marginBottom:8}}><span style={{width:8,height:8,borderRadius:"50%",background:PC[t.priority]}}/><span style={{fontSize:14,color:"#F5F0EB"}}>{t.text}</span></div>)}</>}
+        {cDH.length>0&&<><div style={{...LBL,marginTop:(cDE.length||cDT.length)?12:0}}>Vanor</div>{cDH.map(hb=><div key={hb.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px",background:CARD,border:"1px solid "+BD,borderRadius:14,marginBottom:8}}><span style={{fontSize:16}}>{hb.icon}</span><span style={{fontSize:14,color:"#F5F0EB"}}>{hb.name}</span></div>)}</>}
+        {cDE.length===0&&cDT.length===0&&cDH.length===0&&<div style={{textAlign:"center",padding:"18px 0",color:"rgba(201,162,39,.15)",fontSize:13}}>Inget planerat</div>}
+        <button onClick={()=>setDsForm("pick")} style={{width:"100%",padding:13,borderRadius:12,background:GD,border:"1px dashed "+BD,color:G,fontSize:14,fontWeight:600,cursor:"pointer",marginTop:10}}>+ Lägg till</button>
+      </>}
+      {dsForm==="pick"&&<div style={{display:"flex",flexDirection:"column",gap:8}}>{[{k:"event",ic:"📌",l:"Händelse"},{k:"task",ic:"✅",l:"Att göra"},{k:"habit",ic:"🔄",l:"Ny vana"}].map(o=><button key={o.k} onClick={()=>setDsForm(o.k)} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"rgba(255,255,255,.03)",border:"1px solid "+BD,borderRadius:14,cursor:"pointer"}}><span style={{fontSize:20,width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",background:GD,borderRadius:10}}>{o.ic}</span><span style={{fontSize:15,fontWeight:600,color:"#F5F0EB"}}>{o.l}</span></button>)}</div>}
+      {dsForm==="event"&&<EventFields title={evT} setTitle={setEvT} hour={evH} setHour={setEvH} min={evMi} setMin={setEvMi} pri={evP} setPri={setEvP} onSave={doCalAdd}/>}
+      {dsForm==="task"&&<><input value={calTT} onChange={e=>setCalTT(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doCalAdd()} placeholder="Vad behöver göras?" style={{...INP,marginBottom:12}} autoFocus/><div style={{display:"flex",gap:8,alignItems:"center"}}>{[{k:"high",l:"Hög",c:"#FF6B6B"},{k:"medium",l:"Med",c:G},{k:"low",l:"Låg",c:"#6BCB77"}].map(p=><button key={p.k} onClick={()=>setCalTP(p.k)} style={smB(calTP===p.k,p.c)}>{p.l}</button>)}<button onClick={doCalAdd} style={{marginLeft:"auto",padding:"9px 22px",borderRadius:10,background:"linear-gradient(135deg,"+G+","+GL+")",color:BG,border:"none",fontSize:13,fontWeight:700,cursor:"pointer"}}>Spara</button></div></>}
+      {dsForm==="habit"&&<><input value={calHN} onChange={e=>setCalHN(e.target.value)} placeholder="Namn på vana" style={{...INP,marginBottom:14}} autoFocus/><HabitFields color={calHC} setColor={setCalHC} perDay={calHP} setPerDay={setCalHP} wdays={calHW} setWdays={setCalHW}/><button onClick={doCalAdd} style={FBTN}>Skapa vana</button></>}
+    </Sheet>
+    {/* EDIT SHEET */}
+    <Sheet open={editType!==null} onClose={()=>setEditType(null)} title={editType==="task"?"Redigera uppgift":editType==="habit"?"Redigera vana":"Redigera mål"}>
+      {editType==="task"&&<><input value={eText} onChange={e=>setEText(e.target.value)} style={{...INP,marginBottom:12}}/><div style={LBL}>Prioritet</div><div style={{display:"flex",gap:8,marginBottom:14}}>{[{k:"high",l:"Hög",c:"#FF6B6B"},{k:"medium",l:"Medium",c:G},{k:"low",l:"Låg",c:"#6BCB77"}].map(p=><button key={p.k} onClick={()=>setEPri(p.k)} style={smB(ePri===p.k,p.c)}>{p.l}</button>)}</div><div style={LBL}>Datum</div><input type="date" value={eDate} onChange={e=>setEDate(e.target.value)} style={{...INP,marginBottom:16,colorScheme:"dark"}}/><button onClick={saveEdit} style={FBTN}>Spara ändringar</button><button onClick={deleteEdit} style={DBTN}>Ta bort</button></>}
+      {editType==="habit"&&<><input value={eText} onChange={e=>setEText(e.target.value)} style={{...INP,marginBottom:14}}/><HabitFields color={eColor} setColor={setEColor} perDay={ePerDay} setPerDay={setEPerDay} wdays={eWdays} setWdays={setEWdays}/><button onClick={saveEdit} style={FBTN}>Spara ändringar</button><button onClick={deleteEdit} style={DBTN}>Ta bort</button></>}
+      {editType==="goal"&&<>
+        <input value={eText} onChange={e=>setEText(e.target.value)} placeholder="Titel" style={{...INP,marginBottom:12}}/>
+        <div style={LBL}>Kategori</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{GCATS.map(c=><button key={c} onClick={()=>setECat(c)} style={{padding:"6px 12px",borderRadius:10,fontSize:11,fontWeight:600,background:eCat===c?"linear-gradient(135deg,"+G+","+GL+")":"rgba(255,255,255,.04)",color:eCat===c?BG:"rgba(255,255,255,.3)",border:"none",cursor:"pointer"}}>{c}</button>)}</div>
+        <div style={LBL}>Anteckningar</div>
+        <textarea value={eNotes} onChange={e=>setENotes(e.target.value)} placeholder="Beskriv ditt mål..." rows={3} style={{...INP,marginBottom:12}}/>
+        <div style={LBL}>Deadline</div>
+        <input type="date" value={eDL} onChange={e=>setEDL(e.target.value)} style={{...INP,marginBottom:12,colorScheme:"dark"}}/>
+        <div style={LBL}>Progress: {eProg}%</div>
+        <input type="range" min="0" max="100" value={eProg} onChange={e=>setEProg(Number(e.target.value))} style={{width:"100%",accentColor:G,marginBottom:14}}/>
+        <div style={LBL}>Delmål</div>
+        {eMs.map(m=><div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span style={{flex:1,fontSize:13,color:"#F5F0EB"}}>{m.text}</span><button onClick={()=>setEMs(eMs.filter(x=>x.id!==m.id))} style={{background:"none",border:"none",color:"rgba(255,255,255,.15)",cursor:"pointer",fontSize:12}}>✕</button></div>)}
+        <div style={{display:"flex",gap:8,marginBottom:16}}><input value={eMsT} onChange={e=>setEMsT(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&eMsT.trim()){setEMs([...eMs,{id:gid(),text:eMsT.trim(),done:false}]);setEMsT("");}}} placeholder="Lägg till delmål..." style={{...INP,flex:1}}/><button onClick={()=>{if(eMsT.trim()){setEMs([...eMs,{id:gid(),text:eMsT.trim(),done:false}]);setEMsT("");}}} style={{background:GD,border:"1px solid "+BD,borderRadius:12,padding:"0 14px",color:G,fontWeight:700,cursor:"pointer",fontSize:16}}>+</button></div>
+        <button onClick={saveEdit} style={FBTN}>Spara ändringar</button>
+        <button onClick={deleteEdit} style={DBTN}>Ta bort</button>
+      </>}
+    </Sheet>
+
+    {/* NEW GOAL SHEET */}
+    <Sheet open={showGF} onClose={()=>setShowGF(false)} title="Nytt livsmål">
+      <input value={gt} onChange={e=>setGt(e.target.value)} placeholder="Vad vill du uppnå?" style={{...INP,marginBottom:12}} autoFocus/>
+      <div style={LBL}>Kategori</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{GCATS.map(c=><button key={c} onClick={()=>setGCat(c)} style={{padding:"6px 12px",borderRadius:10,fontSize:11,fontWeight:600,background:gCat===c?"linear-gradient(135deg,"+G+","+GL+")":"rgba(255,255,255,.04)",color:gCat===c?BG:"rgba(255,255,255,.3)",border:"none",cursor:"pointer"}}>{c}</button>)}</div>
+      <div style={LBL}>Anteckningar</div>
+      <textarea value={gNotes} onChange={e=>setGNotes(e.target.value)} placeholder="Beskriv ditt mål..." rows={3} style={{...INP,marginBottom:12}}/>
+      <div style={LBL}>Deadline</div>
+      <input type="date" value={gd2} onChange={e=>setGd2(e.target.value)} style={{...INP,marginBottom:12,colorScheme:"dark"}}/>
+      <div style={LBL}>Startprogress: {gp}%</div>
+      <input type="range" min="0" max="100" value={gp} onChange={e=>setGp(Number(e.target.value))} style={{width:"100%",accentColor:G,marginBottom:14}}/>
+      <div style={LBL}>Delmål</div>
+      {gMs.map(m=><div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span style={{flex:1,fontSize:13,color:"#F5F0EB"}}>{m.text}</span><button onClick={()=>setGMs(gMs.filter(x=>x.id!==m.id))} style={{background:"none",border:"none",color:"rgba(255,255,255,.15)",cursor:"pointer",fontSize:12}}>✕</button></div>)}
+      <div style={{display:"flex",gap:8,marginBottom:16}}><input value={gMsT} onChange={e=>setGMsT(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&gMsT.trim()){setGMs([...gMs,{id:gid(),text:gMsT.trim(),done:false}]);setGMsT("");}}} placeholder="Lägg till delmål..." style={{...INP,flex:1}}/><button onClick={()=>{if(gMsT.trim()){setGMs([...gMs,{id:gid(),text:gMsT.trim(),done:false}]);setGMsT("");}}} style={{background:GD,border:"1px solid "+BD,borderRadius:12,padding:"0 14px",color:G,fontWeight:700,cursor:"pointer",fontSize:16}}>+</button></div>
+      <button onClick={addGoal} style={FBTN}>Skapa mål</button>
+    </Sheet>
+
+    {/* SUB SHEET */}
+    <Sheet open={showSF} onClose={()=>setShowSF(false)} title="Nytt abonnemang">
+      <input value={sn} onChange={e=>setSn(e.target.value)} placeholder="Namn" style={{...INP,marginBottom:10}} autoFocus/>
+      <input type="number" value={sc2} onChange={e=>setSc2(e.target.value)} placeholder="Kostnad/månad (kr)" style={{...INP,marginBottom:12}}/>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>{["#1DB954","#E50914","#FF9F43","#3693F5","#A78BFA","#F472B6","#FFF",G].map(c=><button key={c} onClick={()=>setScol(c)} style={{width:30,height:30,borderRadius:10,background:c,border:scol===c?"2.5px solid #FFF":"2.5px solid transparent",cursor:"pointer"}}/>)}</div>
+      <button onClick={addSub} style={FBTN}>Lägg till</button>
+    </Sheet>
+  </>);
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script></body></html>
